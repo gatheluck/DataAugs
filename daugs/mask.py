@@ -38,7 +38,7 @@ def sample_hard_square_mask(im_size: int, window_size: int):
             w = window_center_w - math.floor(window_size / 2) + idx_w
 
             if (0 <= h < im_size) and (0 <= w < im_size):
-                mask[h, w] = 0.0
+                mask[h, w] = 1.0
 
     return mask
 
