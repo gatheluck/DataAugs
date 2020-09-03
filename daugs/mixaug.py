@@ -142,16 +142,16 @@ class SmoothMix(MixAugmentation):
     MASK_TYPE = ['circle', 'square']  # square mask_type is currently not supported.
 
     def __init__(self,
-                 sigma: list,
+                 sigmas: list,
                  criterion=torch.nn.CrossEntropyLoss(),
                  device: str = 'cuda'):
-        self.sigma = sigma
+        self.sigmas = sigmas
         self.criterion = criterion
         self.device = device
 
     def __call__(self, model: torch.nn, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         rand_index = torch.randperm(x.size(0))
-        masks = self._sample_mask(x.size(0), x.size(-1), sigma=self.sigma).to(self.device)  # shape of masks is [b, 3, h, w]
+        masks = self._sample_mask(x.size(0), x.size(-1), sigmas=self.sigmas).to(self.device)  # shape of masks is [b, 3, h, w]
         lams = masks[:, 0, :, :].sum(dim=(-1, -2)).to(self.device)  # shape of lams is [b]
 
         output, x_mix, x_a, x_b = self._clac_output(model, x, rand_index, masks)
@@ -166,9 +166,9 @@ class SmoothMix(MixAugmentation):
         masks = list()
         if mask_type == 'circle':
             # kwargs should have 'sigma'
-            assert 'sigma' in kwargs.keys(), 'mask_type == "circle" requires "sigma" as kwargs.'
-            assert len(kwargs['sigma']) > 0
-            sigmas = random.choices(kwargs['sigma'], k=batch_size)  # random sampling from list of sigma candidates.
+            assert 'sigmas' in kwargs.keys(), 'mask_type == "circle" requires "sigmas" as kwargs.'
+            assert len(kwargs['sigmas']) > 0
+            sigmas = random.choices(kwargs['sigmas'], k=batch_size)  # random sampling from list of sigma candidates.
             masks = [sample_gaussian_circle_mask(im_size, sigma)[None, :, :].repeat(3, 1, 1) for sigma in sigmas]
         else:
             raise NotImplementedError
@@ -197,7 +197,7 @@ if __name__ == '__main__':
     augmentors = {
         'mixup': Mixup(),
         'cutmix': Cutmix(),
-        'smoothmix': SmoothMix(sigma=[8, 16])
+        'smoothmix': SmoothMix(sigmas=[8, 16])
     }
 
     for augmentor_name, augmentor in augmentors.items():
