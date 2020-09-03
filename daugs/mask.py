@@ -17,16 +17,16 @@ def sample_hard_square_mask(im_size: int, window_size: int):
     - window_size (int): size of window. if -1, return full size mask.
 
     Return:
-    - mask (torch.BoolTensor): hard squre mask.
+    - mask (torch.Tensor): hard squre mask.
     """
     assert im_size >= 2
     assert (1 <= window_size <= im_size) or (window_size == -1)
 
     # if window_size == -1, return all True mask.
     if window_size == -1:
-        return torch.ones(im_size, im_size, dtype=torch.bool)
+        return torch.ones(im_size, im_size, dtype=torch.float)
 
-    mask = torch.zeros(im_size, im_size, dtype=torch.bool)  # all elements are False
+    mask = torch.zeros(im_size, im_size, dtype=torch.float)  # all elements are False
 
     # sample window center. if window size is odd, sample from pixel position. if even, sample from grid position.
     window_center_h = random.randrange(0, im_size) if window_size % 2 == 1 else random.randrange(0, im_size + 1)
@@ -38,7 +38,7 @@ def sample_hard_square_mask(im_size: int, window_size: int):
             w = window_center_w - math.floor(window_size / 2) + idx_w
 
             if (0 <= h < im_size) and (0 <= w < im_size):
-                mask[h, w] = True
+                mask[h, w] = 0.0
 
     return mask
 
