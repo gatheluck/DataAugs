@@ -31,6 +31,9 @@ class NoiseBasedAugmentation():
 
 
 class AddPatchGaussian(NoiseBasedAugmentation):
+    """
+    implementation of PatchGaussian (arXiv 2019): https://arxiv.org/abs/1906.02611
+    """
     def __init__(self,
                  patch_size: int,
                  max_scale: float,
@@ -65,11 +68,6 @@ class AddPatchGaussian(NoiseBasedAugmentation):
         mask = sample_hard_square_mask(h, patch_size).repeat(c, 1, 1)
 
         gaussian = torch.normal(mean=0.0, std=scale, size=(c, w, h))
-        # gaussian_x = torch.clamp(x + gaussian, 0.0, 1.0)
-
-        # x_a = mask * x
-        # x_b = (torch.ones_like(mask) - mask) * gaussian_x
-        # x_mix = torch.clamp(x_a + x_b, min=0.0, max=1.0)
         x_mix = self.add_noise(x, gaussian, mask)
 
         return x_mix
@@ -107,13 +105,8 @@ class AddSmoothGaussian(NoiseBasedAugmentation):
 
         scale = random.uniform(0, 1) * self.max_scale if self.randomize_scale else self.max_scale
         gaussian = torch.normal(mean=0.0, std=scale, size=(c, w, h))
-        # gaussian_x = torch.clamp(x + gaussian, 0.0, 1.0)
-
-        # x_a = mask * x
-        # x_b = (torch.ones_like(mask) - mask) * gaussian_x
-        # x_mix = torch.clamp(x_a + x_b, min=0.0, max=1.0)
-
         x_mix = self.add_noise(x, gaussian, mask)
+
         return x_mix
 
 
