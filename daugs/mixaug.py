@@ -8,6 +8,7 @@ sys.path.append(base)
 import numpy as np
 import torch
 
+from daugs.mask import sample_hard_square_mask
 from daugs.mask import sample_gaussian_circle_mask
 
 
@@ -58,6 +59,9 @@ class MixAugmentation():
 
 
 class Mixup(MixAugmentation):
+    """
+    implementation of Mixup (ICLR 2018): https://arxiv.org/abs/1710.09412
+    """
     def __init__(self,
                  beta_dist_a: float = 1.0,
                  beta_dist_b: float = 1.0,
@@ -84,8 +88,58 @@ class Mixup(MixAugmentation):
         return torch.from_numpy(np.random.beta(beta_dist_a, beta_dist_b, size=batch_size)).float()
 
 
+class Cutmix(Mixup):
+    """
+    implementation of CutMix (ICCV 2019): https://arxiv.org/abs/1905.04899
+    """
+    def __init__(self,
+                 beta_dist_a: float = 1.0,
+                 beta_dist_b: float = 1.0,
+                 criterion=torch.nn.CrossEntropyLoss(),
+                 device: str = 'cuda'):
+        self.beta_dist_a = beta_dist_a
+        self.beta_dist_b = beta_dist_b
+        self.criterion = criterion
+        self.device = device
+
+    def __call__(self, model: torch.nn, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        rand_index = torch.randperm(x.size(0))
+        lams_rough = self._sample_lambda(x.size(0), self.beta_dist_a, self.beta_dist_b).to(self.device)
+        masks = torch.stack([self.sample_square_mask(x.size(-1), lam.item())[None, :, :].repeat(3, 1, 1) for lam in lams_rough]).to(self.device)  # shape of masks is [b, 3, h, w]
+        lams = masks[:, 0, :, :].sum(dim=(-1, -2)).to(self.device)  # shape of lams is [b]
+
+        output, x_mix, x_a, x_b = self._clac_output(model, x, rand_index, masks)
+        loss = self._calc_loss(output, t, rand_index, lams, self.criterion)
+        retdict = dict(masks=masks, x_mix=x_mix, x_a=x_a, x_b=x_b)
+        return loss, retdict
+
+    @classmethod
+    def sample_square_mask(cls, im_size: int, lam: float):
+        assert im_size >= 2
+        assert 0.0 <= lam <= 1.0
+
+        window_size = int(im_size * np.sqrt(1.0 - lam))
+
+        # sampling window center
+        ch = np.random.randint(im_size)
+        cw = np.random.randint(im_size)
+
+        bbh_min = np.clip(ch - (window_size // 2), 0, im_size)
+        bbw_min = np.clip(cw - (window_size // 2), 0, im_size)
+        bbh_max = np.clip(ch + (window_size // 2), 0, im_size)
+        bbw_max = np.clip(cw + (window_size // 2), 0, im_size)
+
+        mask = torch.zeros(im_size, im_size, dtype=torch.float)
+        mask[bbh_min:bbh_max, bbw_min:bbw_max] = torch.ones_like(mask, dtype=torch.float)[bbh_min:bbh_max, bbw_min:bbw_max]
+
+        return mask
+
+
 class SmoothMix(MixAugmentation):
-    MASK_TYPE = ['circle', 'square']
+    """
+    implementation of SmoothMix (CVPR Workshop 2020): https://openaccess.thecvf.com/content_CVPRW_2020/papers/w45/Lee_SmoothMix_A_Simple_Yet_Effective_Data_Augmentation_to_Train_Robust_CVPRW_2020_paper.pdf
+    """
+    MASK_TYPE = ['circle', 'square']  # square mask_type is currently not supported.
 
     def __init__(self,
                  sigma: list,
@@ -142,6 +196,7 @@ if __name__ == '__main__':
 
     augmentors = {
         'mixup': Mixup(),
+        'cutmix': Cutmix(),
         'smoothmix': SmoothMix(sigma=[8, 16])
     }
 
