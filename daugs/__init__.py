@@ -1,0 +1,1 @@
+from .mask import sample_hard_square_mask
