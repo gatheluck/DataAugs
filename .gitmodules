@@ -1,0 +1,3 @@
+[submodule "submodules/FourierHeatmap"]
+	path = submodules/FourierHeatmap
+	url = https://github.com/gatheluck/FourierHeatmap.git
