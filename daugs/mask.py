@@ -79,7 +79,7 @@ def sample_gaussian_circle_mask(im_size: int, sigma: float):
     """
     Args:
     - im_size (int): size of image.
-    - sigma (float): variance of Gaussian.
+    - sigma (float): variance of Gaussian. the value should be in [0.0, 1.0]
 
     Return:
     - mask (torch.FloatTensor): soft circle mask.
@@ -89,7 +89,7 @@ def sample_gaussian_circle_mask(im_size: int, sigma: float):
         return torch.exp(expornet)
 
     assert im_size >= 2
-    assert sigma > 0
+    assert 0.0 <= sigma <= 1.0
 
     # sample center of Gaussian.
     mu_h = random.randrange(0, im_size)
@@ -97,8 +97,8 @@ def sample_gaussian_circle_mask(im_size: int, sigma: float):
 
     h, w = torch.meshgrid([torch.arange(0, im_size), torch.arange(0, im_size)])  # h and w is (im_size, im_size)
 
-    Gh = _calc_G(h, mu_h, sigma)
-    Gw = _calc_G(w, mu_w, sigma)
+    Gh = _calc_G(h, mu_h, int(sigma * im_size))
+    Gw = _calc_G(w, mu_w, int(sigma * im_size))
     mask = Gh * Gw
 
     return mask
@@ -112,7 +112,7 @@ if __name__ == '__main__':
     for i in range(100):
         im_size = 32
         window_size = 16
-        sigma = 8
+        sigma = 0.25
 
         # sample_hard_square_mask(im_size, window_size)
         # sample_gaussian_circle_mask(im_size, sigma)
@@ -128,6 +128,6 @@ if __name__ == '__main__':
     # print(sample_hard_square_mask(5, 3))
 
     # print(sample_gaussian_circle_mask(32, 8))
-    torchvision.utils.save_image(sample_gaussian_circle_mask(32, 8), '../logs/gaussian_mask_32.png')
+    torchvision.utils.save_image(sample_gaussian_circle_mask(32, 0.25), '../logs/gaussian_mask_32.png')
     # print(sample_gaussian_circle_mask(224, 32))
-    torchvision.utils.save_image(sample_gaussian_circle_mask(224, 32), '../logs/gaussian_mask_224.png')
+    torchvision.utils.save_image(sample_gaussian_circle_mask(224, 0.5), '../logs/gaussian_mask_224.png')

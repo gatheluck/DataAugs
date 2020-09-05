@@ -167,8 +167,9 @@ class SmoothMix(MixAugmentation):
         if mask_type == 'circle':
             # kwargs should have 'sigma'
             assert 'sigmas' in kwargs.keys(), 'mask_type == "circle" requires "sigmas" as kwargs.'
-            assert len(kwargs['sigmas']) > 0
-            sigmas = random.choices(kwargs['sigmas'], k=batch_size)  # random sampling from list of sigma candidates.
+            assert 0 < len(kwargs['sigmas']) <= 2  # length of sigmas should be 1 or 2.
+            sigmas = [random.uniform(min(kwargs['sigmas']), max(kwargs['sigmas'])) for _ in range(batch_size)]
+            # sigmas = random.choices(kwargs['sigmas'], k=batch_size)  # random sampling from list of sigma candidates.
             masks = [sample_gaussian_circle_mask(im_size, sigma)[None, :, :].repeat(3, 1, 1) for sigma in sigmas]
         else:
             raise NotImplementedError
@@ -197,7 +198,7 @@ if __name__ == '__main__':
     augmentors = {
         'mixup': Mixup(),
         'cutmix': Cutmix(),
-        'smoothmix': SmoothMix(sigmas=[8, 16])
+        'smoothmix': SmoothMix(sigmas=[0.25, 0.5])
     }
 
     for augmentor_name, augmentor in augmentors.items():

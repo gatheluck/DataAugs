@@ -107,7 +107,8 @@ class AddSmoothGaussian(NoiseBasedAugmentation):
         assert h >= 1 and w >= 1
         assert h == w
 
-        sigma = random.choices(self.sigmas, k=1)[0]
+        # sigma = random.choices(self.sigmas, k=1)[0]
+        sigma = random.uniform(min(self.sigmas), max(self.sigmas))
         mask = sample_gaussian_circle_mask(h, sigma)[None, :, :].repeat(3, 1, 1)
 
         scale = random.uniform(0, 1) * self.max_scale if self.randomize_scale else self.max_scale
@@ -183,7 +184,8 @@ class AddSmoothFourier(NoiseBasedAugmentation):
         assert h >= 1 and w >= 1
         assert h == w
 
-        sigma = random.choices(self.sigmas, k=1)[0]
+        # sigma = random.choices(self.sigmas, k=1)[0]
+        sigma = random.uniform(min(self.sigmas), max(self.sigmas))
         mask = sample_gaussian_circle_mask(h, sigma)[None, :, :].repeat(3, 1, 1)
 
         max_h_index = int((h - 1) // 2)
@@ -201,9 +203,9 @@ if __name__ == '__main__':
     import torchvision
     augmentors = {
         'patch_gaussian': AddPatchGaussian(patch_size=16, max_scale=0.5, randomize_patch_size=True, randomize_scale=True),
-        'smooth_gaussian': AddSmoothGaussian(max_scale=0.5, randomize_scale=True, sigmas=[8, 16]),
+        'smooth_gaussian': AddSmoothGaussian(max_scale=0.5, randomize_scale=True, sigmas=[0.25, 0.5]),
         'patch_fourier': AddPatchFourier(patch_size=16, randomize_patch_size=True, eps=16.0),
-        'smooth_fourier': AddSmoothFourier(sigmas=[8], eps=16.0)
+        'smooth_fourier': AddSmoothFourier(sigmas=[0.25], eps=16.0)
     }
 
     for augmentor_name, augmentor in augmentors.items():
