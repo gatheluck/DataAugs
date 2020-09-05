@@ -43,6 +43,38 @@ def sample_hard_square_mask(im_size: int, window_size: int):
     return mask
 
 
+# def sample_gaussian_circle_mask(im_size: int, sigma: float):
+#     """
+#     Args:
+#     - im_size (int): size of image.
+#     - sigma (float): variance of Gaussian.
+
+#     Return:
+#     - mask (torch.FloatTensor): soft circle mask.
+#     """
+
+#     def _calc_G(x: int, mu: float, sigma: float):
+#         expornet = torch.FloatTensor([-1.0 * ((x - mu) ** 2 / (2.0 * (sigma ** 2)))])
+#         return torch.exp(expornet)
+
+#     assert im_size >= 2
+#     assert sigma > 0
+
+#     mask = torch.zeros(im_size, im_size, dtype=torch.float)  # all elements are False
+
+#     # sample center of Gaussian.
+#     mu_h = random.randrange(0, im_size)
+#     mu_w = random.randrange(0, im_size)
+
+#     for idx_h in range(im_size):
+#         for idx_w in range(im_size):
+#             Gh = _calc_G(idx_h, mu_h, sigma)
+#             Gw = _calc_G(idx_w, mu_w, sigma)
+#             mask[idx_h, idx_w] = Gh * Gw  # elementwise multiplication
+
+#     return mask
+
+
 def sample_gaussian_circle_mask(im_size: int, sigma: float):
     """
     Args:
@@ -52,37 +84,50 @@ def sample_gaussian_circle_mask(im_size: int, sigma: float):
     Return:
     - mask (torch.FloatTensor): soft circle mask.
     """
-
-    def _calc_G(x: int, mu: float, sigma: float):
-        expornet = torch.FloatTensor([-1.0 * ((x - mu) ** 2 / (2.0 * (sigma ** 2)))])
+    def _calc_G(x: torch.tensor, mu: float, sigma: float):
+        expornet = -1.0 * ((x - mu) ** 2 / (2.0 * (sigma ** 2)))
         return torch.exp(expornet)
 
     assert im_size >= 2
     assert sigma > 0
 
-    mask = torch.zeros(im_size, im_size, dtype=torch.float)  # all elements are False
-
     # sample center of Gaussian.
     mu_h = random.randrange(0, im_size)
     mu_w = random.randrange(0, im_size)
 
-    for idx_h in range(im_size):
-        for idx_w in range(im_size):
-            Gh = _calc_G(idx_h, mu_h, sigma)
-            Gw = _calc_G(idx_w, mu_w, sigma)
-            mask[idx_h, idx_w] = Gh * Gw  # elementwise multiplication
+    h, w = torch.meshgrid([torch.arange(0, im_size), torch.arange(0, im_size)])  # h and w is (im_size, im_size)
+
+    Gh = _calc_G(h, mu_h, sigma)
+    Gw = _calc_G(w, mu_w, sigma)
+    mask = Gh * Gw
 
     return mask
 
 
 if __name__ == '__main__':
     import torchvision
-    print(sample_hard_square_mask(6, 2))
-    print(sample_hard_square_mask(6, 3))
-    print(sample_hard_square_mask(5, 2))
-    print(sample_hard_square_mask(5, 3))
+    import time
 
-    print(sample_gaussian_circle_mask(32, 8))
+    t1 = time.time() 
+    for i in range(100):
+        im_size = 32
+        window_size = 16
+        sigma = 8
+
+        # sample_hard_square_mask(im_size, window_size)
+        # sample_gaussian_circle_mask(im_size, sigma)
+        sample_gaussian_circle_mask(im_size, sigma)
+
+    t2 = time.time()
+    elapsed_time = t2 - t1
+    print('elapsed time: {}'.format(elapsed_time))
+
+    # print(sample_hard_square_mask(6, 2))
+    # print(sample_hard_square_mask(6, 3))
+    # print(sample_hard_square_mask(5, 2))
+    # print(sample_hard_square_mask(5, 3))
+
+    # print(sample_gaussian_circle_mask(32, 8))
     torchvision.utils.save_image(sample_gaussian_circle_mask(32, 8), '../logs/gaussian_mask_32.png')
-    print(sample_gaussian_circle_mask(224, 32))
+    # print(sample_gaussian_circle_mask(224, 32))
     torchvision.utils.save_image(sample_gaussian_circle_mask(224, 32), '../logs/gaussian_mask_224.png')
