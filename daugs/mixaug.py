@@ -34,12 +34,11 @@ class MixAugmentation():
         assert len(rand_index.shape) == 1
         assert torch.min(masks) >= torch.min(torch.zeros_like(masks)) and torch.max(masks) <= torch.max(torch.ones_like(masks))
 
-        # reflect flags
-        masks = torch.where(flags[:, None, None, None].repeat(1, masks.size(1), masks.size(2), masks.size(3)), masks, torch.ones_like(masks))
-
         x_a = masks * x
         x_b = (torch.ones_like(masks) - masks) * x[rand_index]
-        x_mix = torch.clamp(x_a + x_b, min=0.0, max=1.0)
+
+        x_mix = torch.where(flags[:, None, None, None].repeat(1, masks.size(1), masks.size(2), masks.size(3)), x_a + x_b, x)
+        x_mix = torch.clamp(x_mix, min=0.0, max=1.0)
 
         output = model(x_mix)
         return output, x_mix.detach(), x_a.detach(), x_b.detach()
@@ -60,9 +59,12 @@ class MixAugmentation():
         assert len(t.shape) == len(rand_index.shape) == len(lams.shape) == 1
 
         t_a, t_b = t, t[rand_index]
-        lams = torch.where(flags, lams, torch.ones_like(lams).float())  # reflect flags
-        loss = ((lams * criterion(output, t_a)) + ((torch.ones_like(lams) - lams) * criterion(output, t_b))).sum()
-        return loss
+
+        loss_x = criterion(output, t)
+        loss_mix = (lams * criterion(output, t_a)) + ((torch.ones_like(lams) - lams) * criterion(output, t_b))
+
+        loss = torch.where(flags, loss_mix, loss_x)
+        return loss.sum()
 
     def _get_flags(self,
                    batch_size: int,
@@ -235,6 +237,7 @@ if __name__ == '__main__':
         for (x, t) in loader:
             x, t = x.cuda(), t.cuda()
             loss, retdict = augmentor(model, x, t)
+            print(loss)
             for k, v in retdict.items():
                 torchvision.utils.save_image(v, '../logs/{augmentor}_{k}.png'.format(augmentor=augmentor_name, k=k))
             break
