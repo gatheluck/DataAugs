@@ -85,7 +85,8 @@ class Mixup(MixAugmentation):
                  beta_dist_b: float = 1.0,
                  prob_use_mixaug: float = 1.0,
                  criterion=torch.nn.CrossEntropyLoss(),
-                 device: str = 'cuda'):
+                 device: str = 'cuda',
+                 **kwargs):
         self.beta_dist_a = beta_dist_a
         self.beta_dist_b = beta_dist_b
         self.prob_use_mixaug = prob_use_mixaug
@@ -118,7 +119,8 @@ class Cutmix(Mixup):
                  beta_dist_b: float = 1.0,
                  prob_use_mixaug: float = 1.0,
                  criterion=torch.nn.CrossEntropyLoss(),
-                 device: str = 'cuda'):
+                 device: str = 'cuda',
+                 **kwargs):
         self.beta_dist_a = beta_dist_a
         self.beta_dist_b = beta_dist_b
         self.prob_use_mixaug = prob_use_mixaug
@@ -169,7 +171,8 @@ class SmoothMix(MixAugmentation):
                  sigmas: list,
                  prob_use_mixaug: float = 1.0,
                  criterion=torch.nn.CrossEntropyLoss(),
-                 device: str = 'cuda'):
+                 device: str = 'cuda',
+                 **kwargs):
         self.sigmas = sigmas
         self.prob_use_mixaug = prob_use_mixaug
         self.criterion = criterion
