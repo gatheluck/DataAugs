@@ -23,19 +23,24 @@ class MixAugmentation():
                      model: torch.nn,
                      x: torch.tensor,
                      rand_index: torch.tensor,
-                     masks: torch.tensor):
+                     masks: torch.tensor,
+                     flags: torch.tensor):
         """
         calcutate output of forwarding mixed input.
         mask * x_a + (1.0 - mask) * x_b
         """
-        assert x.size(0) == rand_index.size(0) == masks.size(0)
+        assert x.size(0) == rand_index.size(0) == masks.size(0) == flags.size(0)
         assert len(x.shape) == len(masks.shape) == 4
         assert len(rand_index.shape) == 1
         assert torch.min(masks) >= torch.min(torch.zeros_like(masks)) and torch.max(masks) <= torch.max(torch.ones_like(masks))
 
+        # reflect flags
+        masks = torch.where(flags[:, None, None, None].repeat(1, masks.size(1), masks.size(2), masks.size(3)), masks, torch.ones_like(masks))
+
         x_a = masks * x
         x_b = (torch.ones_like(masks) - masks) * x[rand_index]
         x_mix = torch.clamp(x_a + x_b, min=0.0, max=1.0)
+
         output = model(x_mix)
         return output, x_mix.detach(), x_a.detach(), x_b.detach()
 
@@ -44,18 +49,31 @@ class MixAugmentation():
                    t: torch.tensor,
                    rand_index: torch.tensor,
                    lams: torch.tensor,
-                   criterion: torch.nn) -> torch.tensor:
+                   criterion: torch.nn,
+                   flags: torch.tensor):
         """
         calcurate loss for mix augmentation.
         lamda * (loss for t_a)   + (1.0 - lamda) * (loss for t_b)
         """
-        assert output.size(0) == t.size(0) == rand_index.size(0) == lams.size(0)
+        assert output.size(0) == t.size(0) == rand_index.size(0) == lams.size(0) == flags.size(0)
         assert len(output.shape) == 2
         assert len(t.shape) == len(rand_index.shape) == len(lams.shape) == 1
 
         t_a, t_b = t, t[rand_index]
+        lams = torch.where(flags, lams, torch.ones_like(lams).float())  # reflect flags
         loss = (lams * criterion(output, t_a)) + ((torch.ones_like(lams) - lams) * criterion(output, t_b))
         return loss
+
+    def _get_flags(self,
+                   batch_size: int,
+                   prob_use_mixaug: float):
+        assert batch_size > 0
+        assert 0 <= prob_use_mixaug <= 1
+
+        probs = torch.rand(batch_size)  # sample prob from uniform dist
+        use_mixaug = probs < prob_use_mixaug
+
+        return use_mixaug
 
 
 class Mixup(MixAugmentation):
@@ -65,10 +83,12 @@ class Mixup(MixAugmentation):
     def __init__(self,
                  beta_dist_a: float = 1.0,
                  beta_dist_b: float = 1.0,
+                 prob_use_mixaug: float = 1.0,
                  criterion=torch.nn.CrossEntropyLoss(),
                  device: str = 'cuda'):
         self.beta_dist_a = beta_dist_a
         self.beta_dist_b = beta_dist_b
+        self.prob_use_mixaug = prob_use_mixaug
         self.criterion = criterion
         self.device = device
 
@@ -76,9 +96,10 @@ class Mixup(MixAugmentation):
         rand_index = torch.randperm(x.size(0))
         lams = self._sample_lambda(x.size(0), self.beta_dist_a, self.beta_dist_b).to(self.device)  # shape of lams is [b]
         masks = lams[:, None, None, None].repeat(1, 3, x.size(-2), x.size(-1))  # shape of masks are [b, 3, h, w]
+        flags = self._get_flags(x.size(0), self.prob_use_mixaug).to(self.device)
 
-        output, x_mix, x_a, x_b = self._clac_output(model, x, rand_index, masks)
-        loss = self._calc_loss(output, t, rand_index, lams, self.criterion)
+        output, x_mix, x_a, x_b = self._clac_output(model, x, rand_index, masks, flags)
+        loss = self._calc_loss(output, t, rand_index, lams, self.criterion, flags)
         retdict = dict(masks=masks, x_mix=x_mix, x_a=x_a, x_b=x_b)
         return loss, retdict
 
@@ -95,10 +116,12 @@ class Cutmix(Mixup):
     def __init__(self,
                  beta_dist_a: float = 1.0,
                  beta_dist_b: float = 1.0,
+                 prob_use_mixaug: float = 1.0,
                  criterion=torch.nn.CrossEntropyLoss(),
                  device: str = 'cuda'):
         self.beta_dist_a = beta_dist_a
         self.beta_dist_b = beta_dist_b
+        self.prob_use_mixaug = prob_use_mixaug
         self.criterion = criterion
         self.device = device
 
@@ -107,9 +130,10 @@ class Cutmix(Mixup):
         lams_rough = self._sample_lambda(x.size(0), self.beta_dist_a, self.beta_dist_b).to(self.device)
         masks = torch.stack([self.sample_square_mask(x.size(-1), lam.item())[None, :, :].repeat(3, 1, 1) for lam in lams_rough]).to(self.device)  # shape of masks is [b, 3, h, w]
         lams = masks[:, 0, :, :].sum(dim=(-1, -2)).to(self.device)  # shape of lams is [b]
+        flags = self._get_flags(x.size(0), self.prob_use_mixaug).to(self.device)
 
-        output, x_mix, x_a, x_b = self._clac_output(model, x, rand_index, masks)
-        loss = self._calc_loss(output, t, rand_index, lams, self.criterion)
+        output, x_mix, x_a, x_b = self._clac_output(model, x, rand_index, masks, flags)
+        loss = self._calc_loss(output, t, rand_index, lams, self.criterion, flags)
         retdict = dict(masks=masks, x_mix=x_mix, x_a=x_a, x_b=x_b)
         return loss, retdict
 
@@ -143,9 +167,11 @@ class SmoothMix(MixAugmentation):
 
     def __init__(self,
                  sigmas: list,
+                 prob_use_mixaug: float = 1.0,
                  criterion=torch.nn.CrossEntropyLoss(),
                  device: str = 'cuda'):
         self.sigmas = sigmas
+        self.prob_use_mixaug = prob_use_mixaug
         self.criterion = criterion
         self.device = device
 
@@ -153,9 +179,10 @@ class SmoothMix(MixAugmentation):
         rand_index = torch.randperm(x.size(0))
         masks = self._sample_mask(x.size(0), x.size(-1), sigmas=self.sigmas).to(self.device)  # shape of masks is [b, 3, h, w]
         lams = masks[:, 0, :, :].sum(dim=(-1, -2)).to(self.device)  # shape of lams is [b]
+        flags = self._get_flags(x.size(0), self.prob_use_mixaug).to(self.device)
 
-        output, x_mix, x_a, x_b = self._clac_output(model, x, rand_index, masks)
-        loss = self._calc_loss(output, t, rand_index, lams, self.criterion)
+        output, x_mix, x_a, x_b = self._clac_output(model, x, rand_index, masks, flags)
+        loss = self._calc_loss(output, t, rand_index, lams, self.criterion, flags)
         retdict = dict(masks=masks, x_mix=x_mix, x_a=x_a, x_b=x_b)
         return loss, retdict
 
@@ -196,9 +223,9 @@ if __name__ == '__main__':
     # loader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
 
     augmentors = {
-        'mixup': Mixup(),
-        'cutmix': Cutmix(),
-        'smoothmix': SmoothMix(sigmas=[0.25, 0.5])
+        'mixup': Mixup(prob_use_mixaug=1.0),
+        'cutmix': Cutmix(prob_use_mixaug=1.0),
+        'smoothmix': SmoothMix(sigmas=[0.25, 0.5], prob_use_mixaug=1.0)
     }
 
     for augmentor_name, augmentor in augmentors.items():
