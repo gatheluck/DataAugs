@@ -61,7 +61,7 @@ class MixAugmentation():
 
         t_a, t_b = t, t[rand_index]
         lams = torch.where(flags, lams, torch.ones_like(lams).float())  # reflect flags
-        loss = (lams * criterion(output, t_a)) + ((torch.ones_like(lams) - lams) * criterion(output, t_b)).sum()
+        loss = ((lams * criterion(output, t_a)) + ((torch.ones_like(lams) - lams) * criterion(output, t_b))).sum()
         return loss
 
     def _get_flags(self,
